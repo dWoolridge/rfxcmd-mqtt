@@ -6,11 +6,14 @@ DESCRIPTION
 
 RFXcmd is Python script that interfaces the RFX USB devices from RFXcom http://www.rfxcom.com.
 
+Added MQTT publish abilities for sensor types 0x50 - 0x57 (temperature, humidity, rain, wind, and UV sensors).  Configured in the config.yaml file.
+
 All documents and other related to RFXcmd can be found at http://www.rfxcmd.eu
 
 REQUIREMENTS
 
 - Python 3.x
+- paho-mqtt (pip install paho-mqtt)
 - Tested on Raspberry Pi (Debian Jessie 8.11) with Python 3.4
 - Tested on Raspberry Pi (Debian Buster 10.4) with Python 3.7
 - Tested on Mac OSX 19.6.0 with Python 3.9
