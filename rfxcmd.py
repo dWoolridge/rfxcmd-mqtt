@@ -58,6 +58,11 @@ from string import whitespace
 import sys
 import xml.dom.minidom as minidom
 
+# ------------------------------------------------------------------------------
+# ADDED FOR MQTT - Requires paho MQTT (pip install paho-mqtt)
+# ------------------------------------------------------------------------------
+import paho.mqtt.client as mqtt
+
 # 3rd party library
 # These might not be needed, depended on usage
 from serial import Serial, VERSION, SerialException
@@ -96,10 +101,19 @@ class ConfigData:
             log_msgfile="",
             logfile="rfxcmd.log",
             loglevel="info",
+            MQTThost="",
+            MQTTport=1883,
+            MQTTtopic="sensor/oregon/",
+            MQTTqos=2,
+            MQTTretain=True,
+            MQTTsenddata=["Temperature", "Humidity"],
+            MQTTunits="imperial",
+            outputfile="./log/output.log",
             process_rfxmsg=True,
             program_path="",
             protocol_file="protocol.xml",
             protocol_startup=False,
+            sendMQTT=False,
             serial_active=True,
             serial_device=None,
             serial_rate=38400,
@@ -119,11 +133,20 @@ class ConfigData:
         self.log_msgfile = log_msgfile
         self.logfile = logfile
         self.loglevel = loglevel
+        self.MQTThost = MQTThost
+        self.MQTTport = MQTTport
+        self.MQTTtopic = MQTTtopic
+        self.MQTTqos = MQTTqos
+        self.MQTTretain = MQTTretain
+        self.MQTTsenddata = MQTTsenddata
+        self.MQTTunits = MQTTunits
+        self.outputfile = outputfile
         self.process_rfxmsg = process_rfxmsg
         self.program_path = program_path
         self.protocol_file = protocol_file
         self.protocol_startup = protocol_startup
         self.serial_active = serial_active
+        self.sendMQTT = sendMQTT
         self.serial_device = serial_device
         self.serial_rate = serial_rate
         self.serial_timeout = serial_timeout
@@ -765,10 +788,48 @@ def decode_packet(message):
 
     # Print result
     print_decoded(metadata)
-    output_me(timestamp, message, packettype, subtype, seqnbr, output_extra)
+#    output_me(timestamp, message, packettype, subtype, seqnbr, output_extra)
+
+    # MQTT Send 
+    if CONFIG.sendMQTT:
+        sendMQTT(packettype, metadata)
+
 
     # decodePackage END
     return
+
+# ----------------------------------------------------------------------------
+
+def sendMQTT(packettype, metadata):
+
+    if packettype >= '50' and packettype <= '57' :
+
+        log_me("debug","SENDING MQTT")
+        log_me("debug","packettype=" + packettype )
+        log_me("debug","MQTTunits=" + CONFIG.MQTTunits )
+        log_me("debug","MQTTsenddata=" + CONFIG.MQTTsenddata )
+
+        outputList = CONFIG.MQTTsenddata.lower().split(",")
+
+        for x in metadata:
+            if x["key"].lower() == "id":
+                deviceId = x["value"]
+ 
+            for y in outputList:
+                if y == x["key"].lower() :
+                    # Parse and send this item
+
+                    topic = CONFIG.MQTTtopic + deviceId + "/" + x["key"].lower()
+                    payload = str( x["value"] )
+
+                    # Special case for units
+                    if x["key"].lower() == "temperature" and CONFIG.MQTTunits.lower() == "imperial":
+                        payload = str( float(payload) * 9 / 5 + 32 )
+
+                    log_me("info","MQTT SENT: " + topic + "  " + payload  )
+                    client = mqtt.Client("rfxcomClient")
+                    client.connect(CONFIG.MQTThost, int(CONFIG.MQTTport), 60)
+                    client.publish(topic, payload )
 
 # ----------------------------------------------------------------------------
 
@@ -995,14 +1056,14 @@ def read_config(configfile, configitem):
                 replace("</" + configitem + ">", "")
             log_me("debug", "--> " + xml_data)
         except Exception as err:
-            log_me("error", "The item tag not found in the config file")
+            log_me("error", "The item tag not found in the config file=" + configitem)
             log_me("error", err)
             xml_data = ""
 
         log_me("debug", "Return")
 
     else:
-        log_me("error", "Config file does not exists. Line: " + _line())
+        log_me("error", "Config file does not exist. Line: " + _line())
 
     return xml_data
 
@@ -1350,11 +1411,23 @@ def read_configfile():
         # LOG MESSAGES
         CONFIG.log_msg = bool(read_config(CMDARG.configfile, "log_msg") == "yes")
         CONFIG.log_msgfile = read_config(CMDARG.configfile, "log_msgfile")
+        CONFIG.outputfile = read_config(CMDARG.configfile, "outputfile")
 
         # ------------------------
         # PROTOCOLS
         CONFIG.protocol_startup = bool(read_config(CMDARG.configfile, "protocol_startup") == "yes")
         CONFIG.protocol_file = read_config(CMDARG.configfile, "protocol_file")
+
+        # ------------------------
+        # MQTT
+        CONFIG.sendMQTT = bool(read_config(CMDARG.configfile, "sendMQTT") == "yes")
+        CONFIG.MQTThost = read_config(CMDARG.configfile, "MQTThost") 
+        CONFIG.MQTTport = read_config(CMDARG.configfile, "MQTTport") 
+        CONFIG.MQTTtopic = read_config(CMDARG.configfile, "MQTTtopic") 
+        CONFIG.MQTTqos = read_config(CMDARG.configfile, "MQTTqos") 
+        CONFIG.MQTTretain = read_config(CMDARG.configfile, "MQTTretain") 
+        CONFIG.MQTTsenddata = read_config(CMDARG.configfile, "MQTTsenddata") 
+        CONFIG.MQTTunits = read_config(CMDARG.configfile, "MQTTunits")
 
     else:
         # config file not found, set default values
@@ -1492,8 +1565,10 @@ def output_me(timestamp, message, packettype, subtype, seqnbr, metadata_list):
     """
     This function writes json or csv output in a different file
     """
+
+    log_me("info","outputfile=" + CONFIG.outputfile);
     try:
-        output_file = open('/var/log/output.log', 'a+')
+        output_file = open(CONFIG.outputfile, 'a+')
     except Exception as err:
         log_me("error", err)
         return
