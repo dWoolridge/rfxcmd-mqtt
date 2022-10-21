@@ -38,5 +38,18 @@
 	<!-- Protocol configuration -->
 	<protocol_startup>no</protocol_startup>
 	<protocol_file>protocol.xml</protocol_file>
-	
+
+        <!-- MQTT configuration -->
+        <sendMQTT>no</sendMQTT>
+        <MQTThost>192.168.0.1</MQTThost>
+        <MQTTport>1883</MQTTport>
+        <MQTTtopic>sensor/oregon/</MQTTtopic>
+        <MQTTqos>2</MQTTqos>
+        <MQTTretain>True</MQTTretain>
+        <!-- MQTTsenddata can be:  temperature,humidity,humidity status, -->
+	<!--   signal level,battery,barometric pressure,rain, -->
+	<!--   wind direction,wind speed,wind gust,ultra violet -->
+        <MQTTsenddata>temperature,humidity,humidity status,signal level,battery</MQTTsenddata>
+        <MQTTunits>imperial</MQTTunits> <!-- imperial/metric -->
+
 </config>
